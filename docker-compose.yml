@@ -146,6 +146,15 @@ services:
       retries: 5
     restart: always
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: ["http", "--domain=${NGROK_DOMAIN}", "fastapi:1000"]
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    depends_on:
+      - fastapi
+    restart: always
+
 volumes:
   db-data:
   server-local-data:
