@@ -84,3 +84,7 @@ dev-clean:
 	@docker-compose down -v --remove-orphans
 	@docker-compose rm -f
 	@echo "Cleanup complete!"
+
+process-companies:
+	@echo "Processing companies data..."
+	uv run python -m process.companies
