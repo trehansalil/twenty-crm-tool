@@ -15,5 +15,6 @@ uv.lock
 data/processed/*
 data/raw/*
 data/twenty_data/*
+data/issues/*
 
 process/*.ipynb
