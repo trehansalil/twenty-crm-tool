@@ -15,7 +15,7 @@ RENAMED_COLUMN_DICT = {
     "Company Name": "Name",
     "Website": "Website / Link URL",
     "Created Time": "Creation Date",
-    # "Last Activity Time": "Last Update",
+    "Last Activity Time": "Last update",
     "Address": "Address / Address 1",
     "Country": "Address / Country",
     }
@@ -24,12 +24,45 @@ MAPPING_REGION_FILE = DATA_DIR / "twenty_data" / "inheadenRegion.csv"
 
 REGIONS_DICT = extract_region_mapping(MAPPING_REGION_FILE)
 
+country_mapping = {
+    "India": [
+        "India",
+        "india",
+    ],
+    "United Arab Emirates": [
+        "UAE",
+        "United Arab Emirates",
+        "Dubai, UAE",
+        "Dubai UAE",
+        "Dubai, AE",
+        "Dubai – UAE",
+        "Mauritius, UAE",
+        "Abu Dhabi, UAE",
+        "Sharjah, UAE",
+        "Dubai - UAE",
+        "United Arab Emirtes",
+        "Dubai"
+    ],
+    "Germany": [
+        "Germany",
+        "Deutschland",
+        "germany",
+        "German",
+        "Frankfurt am Main"
+    ],
+}  # [page:1]
+
+
+
 
 def process_companies(input_path, output_path, drop_columns, renamed_column_dict, regions_dict):
     try:
         df = pd.read_csv(input_path)
+        for country, variants in country_mapping.items():
+            df.loc[df['Country'].isin(variants), "Country"] = country
         
         df["Company Region / Id"] = df['Country'].map(regions_dict)
+        # .apply(lambda x: str(x).title() if x is not None else None)
         df.drop(columns=drop_columns, inplace=True)
         df.rename(columns=renamed_column_dict, inplace=True)
         output_path.parent.mkdir(parents=True, exist_ok=True)
