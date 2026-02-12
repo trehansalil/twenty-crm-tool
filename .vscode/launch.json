@@ -11,6 +11,14 @@
             "module": "process.companies",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
+        },        
+        {
+            "name": "Process People",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "process.people",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
         },
     ]
 }

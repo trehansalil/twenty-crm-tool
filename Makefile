@@ -88,3 +88,7 @@ dev-clean:
 process-companies:
 	@echo "Processing companies data..."
 	uv run python -m process.companies
+
+process-people:
+	@echo "Processing people data..."
+	uv run python -m process.people
