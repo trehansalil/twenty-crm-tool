@@ -3,6 +3,25 @@ import pandas as pd
 import unicodedata
 import numpy as np
 
+def parse_phone_json(phone_str):
+    import re
+    calling_code_country = {
+        '+49': 'DE', '+91': 'IN', '+971': 'AE', '+65': 'SG', '+41': 'CH', '+20': 'EG', '+60': 'MY', '+86': 'CN', '+33': 'FR', '+352': 'LU'
+    }
+    if phone_str == 'nan' or phone_str.strip() == '' or phone_str.strip() == '[]':
+        return '[]'
+    # Remove brackets and quotes
+    phone_str = phone_str.strip('[]').strip('"')
+    # Match calling code and number
+    match = re.match(r'(\+\d{1,3})\s*(.*)', phone_str)
+    if match:
+        calling_code = match.group(1)
+        number = re.sub(r'\s+', '', match.group(2))
+        country_code = calling_code_country.get(calling_code, '')
+        return f'[{{"number":"{number}","callingCode":"{calling_code}","countryCode":"{country_code}"}}]'
+    else:
+        return '[]'
+
 def parse_name_to_email(complete_name):
 
     if complete_name is np.nan or complete_name.strip() == "" or complete_name.lower() == "-": 

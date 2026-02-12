@@ -3,11 +3,11 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from process import parse_name_to_email
+from process import parse_name_to_email, parse_phone_json
 
 DATA_DIR = Path("data")
 
-RAW_FILE = DATA_DIR / "raw" / "Contacts_2026_02_10.csv"
+RAW_FILE = DATA_DIR / "raw" / "Contacts_2026_02_12.csv"
 
 PROCESSED_FILE = DATA_DIR / "processed" / "peoples.csv"
 
@@ -16,12 +16,12 @@ ISSUES_FILE = DATA_DIR / "issues" / "people_issues.csv"
 COMPANY_TWENTY_FILE = DATA_DIR / "twenty_data" / "company.csv"
 
 DROP_COLUMNS = [
-    'Contact Owner.id', "Contact Name", 'Created By.id', 'Created By', 'Modified By.id', 'Modified By', 'Modified Time', 
+    'Contact Id', 'Contact Owner.id', "Contact Name", 'Created By.id', 'Created By', 'Modified By.id', 'Modified By', 'Modified Time', 
     "Company Name.id", "Secondary Email", "Company Name", 'Unsubscribed Mode', 'Unsubscribed Time', 'Data Source'
 ]
 
 RENAMED_COLUMNS = {
-    'Contact Id': 'Id',
+    # 'Contact Id': 'Id',
     "First Name": 'Name / First Name',
     "Last Name": 'Name / Last Name',
     'Contact Owner': 'Contact Owner / User Email',
@@ -114,7 +114,8 @@ df["Title"] = df['Title'].map(title_mapping)
 
 df['Company Id'] = df['Company Name'].map(lambda x: company_name_id_mapping.get(x, x))
 df['Tag'] = df['Tag'].astype(str).apply(lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split())>0 else '[]'))
-df['Home Phone'] = df['Home Phone'].astype(str).apply(lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split())>0 else '[]'))
+
+df['Home Phone'] = df['Home Phone'].astype(str).apply(parse_phone_json)
 df['Private Email'] = df['Private Email'].astype(str).apply(lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split())>0 else '[]'))
 
 df.drop(columns=DROP_COLUMNS, inplace=True)
