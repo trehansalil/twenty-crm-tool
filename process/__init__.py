@@ -1,7 +1,17 @@
 
+import logging
+from pathlib import Path
 import pandas as pd
 import unicodedata
 import numpy as np
+
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 def parse_phone_json(phone_str):
     import re
@@ -72,3 +82,65 @@ def extract_region_mapping_new(mapping_file) -> dict:
     # regions_dict = {region_uae['Name'] : region_uae["Id"]}
     regions_dict = dict(zip(region['Name'], region['Id']))
     return regions_dict
+
+def save_processed_data(df: pd.DataFrame, output_path: Path) -> None:
+    """
+    Save processed data to CSV file.
+    
+    Args:
+        df: DataFrame to save
+        output_path: Path where the CSV should be saved
+    """
+    logger.info(f"Saving processed data to {output_path}")
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False)
+    
+    logger.info(f"Successfully saved {len(df)} records")
+
+
+def map_company_ids(df: pd.DataFrame, companies_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Map company names to their corresponding IDs from the reference data.
+    
+    Args:
+        df: DataFrame containing contact data
+        companies_df: DataFrame containing company reference data
+        
+    Returns:
+        pd.DataFrame: DataFrame with company IDs mapped
+    """
+    logger.info("Mapping company names to IDs")
+    company_name_id_mapping = dict(zip(companies_df['Name'], companies_df['Id']))
+    df['Company Id'] = df['Company Name'].map(
+        lambda x: company_name_id_mapping.get(x, x)
+    )
+    return df
+
+
+def format_array_fields(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Format fields that should be JSON arrays for CRM import.
+    
+    Args:
+        df: DataFrame containing contact data
+        
+    Returns:
+        pd.DataFrame: DataFrame with properly formatted array fields
+    """
+    logger.info("Formatting array fields")
+    
+    # Format tags as JSON array
+    df['Tag'] = df['Tag'].astype(str).apply(
+        lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split()) > 0 else '[]')
+    )
+    
+    # Format phone numbers
+    df['Home Phone'] = df['Home Phone'].astype(str).apply(parse_phone_json)
+    
+    # Format private emails as JSON array
+    df['Private Email'] = df['Private Email'].astype(str).apply(
+        lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split()) > 0 else '[]')
+    )
+    
+    return df

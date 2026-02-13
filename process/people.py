@@ -1,31 +1,58 @@
 
+"""
+People Data Processing Module
+
+This module processes contact data from raw CSV files, applies transformations,
+and generates cleaned data for import into the Twenty CRM system.
+"""
+
+import logging
+from pathlib import Path
+from typing import Dict, List
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
-from process import extract_region_mapping_new, parse_name_to_email, parse_phone_json
+from process import extract_region_mapping_new, format_array_fields, map_company_ids, parse_name_to_email, parse_phone_json, save_processed_data
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Directory paths
 DATA_DIR = Path("data")
-
 RAW_FILE = DATA_DIR / "raw" / "Contacts_2026_02_12.csv"
-
 PROCESSED_FILE = DATA_DIR / "processed" / "peoples.csv"
-
 ISSUES_FILE = DATA_DIR / "issues" / "people_issues.csv"
-
 COMPANY_TWENTY_FILE = DATA_DIR / "twenty_data" / "company.csv"
 MAPPING_REGION_FILE = DATA_DIR / "twenty_data" / "inheadenRegion.csv"
 
+# Load region mappings
 REGIONS_DICT = extract_region_mapping_new(MAPPING_REGION_FILE)
 
-
-DROP_COLUMNS = [
-    'Contact Id', 'Contact Owner.id', "Contact Name", 'Created By.id', 'Created By', 'Modified By.id', 'Modified By', 'Modified Time', 
-    "Company Name.id", "Secondary Email", "Company Name", 'Unsubscribed Mode', 'Unsubscribed Time', 'Data Source'
+# Columns to remove from raw data
+DROP_COLUMNS: List[str] = [
+    'Contact Id',
+    'Contact Owner.id',
+    'Contact Name',
+    'Created By.id',
+    'Created By',
+    'Modified By.id',
+    'Modified By',
+    'Modified Time',
+    'Company Name.id',
+    'Secondary Email',
+    'Company Name',
+    'Unsubscribed Mode',
+    'Unsubscribed Time',
+    'Data Source'
 ]
 
-RENAMED_COLUMNS = {
-    # 'Contact Id': 'Id',
+# Column name mappings for CRM import format
+RENAMED_COLUMNS: Dict[str, str] = {
     "First Name": 'Name / First Name',
     "Last Name": 'Name / Last Name',
     'Contact Owner': 'Contact Owner / User Email',
@@ -43,9 +70,29 @@ RENAMED_COLUMNS = {
     "Country": "Address / Country",
     "Primary Language Spoken": "Primary Language",
     "Secondary Language Spoken": "Secondary Language",    
+}    
+
+# Email addresses for user consolidation
+ADMIN_EMAIL = 'admin@inheaden.io'
+
+DEPRECATED_USER_EMAILS = [
+    'traudel.boakye@inheaden.io',
+    'ahmed.elshamanhory@inheaden.io',
+    'inheaden.admin@inheaden.io'
+]
+
+UNREGISTERED_USER_EMAILS = [
+    'florian.schlichting@inheaden.io',
+    'sabine.schafer@inheaden.io',
+    'jeanette.natalie@inheaden.io'
+]
+
+USER_EMAIL_CORRECTIONS = {
+    'lars.grober@inheaden.io': 'lars.groeber@inheaden.io'
 }
 
-title_mapping = {
+# Title standardization mapping
+TITLE_MAPPING: Dict[str, str] = {
     'nan': np.nan,
     'Business Administrator': np.nan,
     'Dr.': 'Dr.',
@@ -105,8 +152,8 @@ title_mapping = {
     'PhD': np.nan
 }
 
-
-country_region_mapping = {
+# Country to region mapping for CRM
+COUNTRY_REGION_MAPPING: Dict[str, List[str]] = {
     "Inheaden Europe": [
         "Germany",
         "Belgium",
@@ -151,33 +198,141 @@ country_region_mapping = {
 }
 
 
-df = pd.read_csv(RAW_FILE)
+def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Load raw contact data and company reference data.
+    
+    Returns:
+        tuple: A tuple containing (contacts_df, companies_df)
+        
+    Raises:
+        FileNotFoundError: If required data files are not found
+    """
+    logger.info(f"Loading contact data from {RAW_FILE}")
+    contacts_df = pd.read_csv(RAW_FILE)
+    
+    logger.info(f"Loading company data from {COMPANY_TWENTY_FILE}")
+    companies_df = pd.read_csv(COMPANY_TWENTY_FILE)
+    
+    return contacts_df, companies_df
 
-companies_df = pd.read_csv(COMPANY_TWENTY_FILE)
 
-df['Contact Owner'] = df['Contact Owner'].map(parse_name_to_email)
-df.loc[df['Contact Owner'].isin(['traudel.boakye@inheaden.io',
-'ahmed.elshamanhory@inheaden.io', 'inheaden.admin@inheaden.io']), 'Contact Owner'] = 'admin@inheaden.io'
-df.loc[df['Contact Owner'].isin(['lars.grober@inheaden.io']), 'Contact Owner'] = 'lars.groeber@inheaden.io'
+def normalize_contact_owners(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize and correct contact owner email addresses.
+    
+    Args:
+        df: DataFrame containing contact data
+        
+    Returns:
+        pd.DataFrame: DataFrame with normalized contact owner emails
+    """
+    logger.info("Normalizing contact owner emails")
+    
+    # Parse names to email format
+    df['Contact Owner'] = df['Contact Owner'].map(parse_name_to_email)
+    
+    # Consolidate deprecated user emails to admin
+    df.loc[df['Contact Owner'].isin(DEPRECATED_USER_EMAILS), 'Contact Owner'] = ADMIN_EMAIL
+    
+    # Apply email corrections
+    for old_email, new_email in USER_EMAIL_CORRECTIONS.items():
+        df.loc[df['Contact Owner'] == old_email, 'Contact Owner'] = new_email
+    
+    # Handle unregistered users
+    df.loc[df['Contact Owner'].isin(UNREGISTERED_USER_EMAILS), 'Contact Owner'] = ADMIN_EMAIL
+    
+    return df
 
-### Patch for unregistered users
-df.loc[df['Contact Owner'].isin(['florian.schlichting@inheaden.io',
-       'sabine.schafer@inheaden.io', 'jeanette.natalie@inheaden.io']), 'Contact Owner'] = 'admin@inheaden.io'
 
-company_name_id_mapping = dict(zip(companies_df['Name'], companies_df['Id']))
-df["Title"] = df['Title'].map(title_mapping)
+def normalize_titles(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Standardize title values according to mapping.
+    
+    Args:
+        df: DataFrame containing contact data
+        
+    Returns:
+        pd.DataFrame: DataFrame with normalized titles
+    """
+    logger.info("Normalizing contact titles")
+    df["Title"] = df['Title'].map(TITLE_MAPPING)
+    return df
 
-df['Company Id'] = df['Company Name'].map(lambda x: company_name_id_mapping.get(x, x))
-df['Tag'] = df['Tag'].astype(str).apply(lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split())>0 else '[]'))
 
-df['Home Phone'] = df['Home Phone'].astype(str).apply(parse_phone_json)
-df['Private Email'] = df['Private Email'].astype(str).apply(lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split())>0 else '[]'))
+def assign_regions(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Assign region IDs based on country values.
+    
+    Args:
+        df: DataFrame containing contact data
+        
+    Returns:
+        pd.DataFrame: DataFrame with region IDs assigned
+    """
+    logger.info("Assigning regions based on countries")
+    
+    for region, countries in COUNTRY_REGION_MAPPING.items():
+        df.loc[df['Country'].isin(countries), 'Contact Region / Id'] = REGIONS_DICT[region]
+    
+    return df
 
-for region, countries in country_region_mapping.items():
-    df.loc[df['Country'].isin(countries), 'Contact Region / Id'] = REGIONS_DICT[region]
 
-df.drop(columns=DROP_COLUMNS, inplace=True)
-df.rename(columns=RENAMED_COLUMNS, inplace=True)
-df.head()
-PROCESSED_FILE.parent.mkdir(parents=True, exist_ok=True)
-df.to_csv(PROCESSED_FILE, index=False)
+def transform_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply final transformations: drop unnecessary columns and rename fields.
+    
+    Args:
+        df: DataFrame containing contact data
+        
+    Returns:
+        pd.DataFrame: Transformed DataFrame ready for export
+    """
+    logger.info("Applying final transformations")
+    
+    df = df.drop(columns=DROP_COLUMNS)
+    df = df.rename(columns=RENAMED_COLUMNS)
+    
+    return df
+
+
+def process_people_data() -> None:
+    """
+    Main processing pipeline for contact data.
+    
+    This function orchestrates the complete data processing workflow:
+    1. Load raw data
+    2. Normalize contact owners and titles
+    3. Map company IDs
+    4. Format array fields
+    5. Assign regions
+    6. Transform and save final data
+    """
+    try:
+        # Load data
+        df, companies_df = load_data()
+        logger.info(f"Loaded {len(df)} contact records")
+        
+        # Apply transformations
+        df = normalize_contact_owners(df)
+        df = normalize_titles(df)
+        df = map_company_ids(df, companies_df)
+        df = format_array_fields(df)
+        df = assign_regions(df)
+        df = transform_dataframe(df)
+        
+        # Save results
+        save_processed_data(df, PROCESSED_FILE)
+        
+        logger.info("People data processing completed successfully")
+        
+    except FileNotFoundError as e:
+        logger.error(f"Required file not found: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Error processing people data: {e}")
+        raise
+
+
+if __name__ == "__main__":
+    process_people_data()
