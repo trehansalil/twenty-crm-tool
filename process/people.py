@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from process import parse_name_to_email, parse_phone_json
+from process import extract_region_mapping_new, parse_name_to_email, parse_phone_json
 
 DATA_DIR = Path("data")
 
@@ -14,6 +14,10 @@ PROCESSED_FILE = DATA_DIR / "processed" / "peoples.csv"
 ISSUES_FILE = DATA_DIR / "issues" / "people_issues.csv"
 
 COMPANY_TWENTY_FILE = DATA_DIR / "twenty_data" / "company.csv"
+MAPPING_REGION_FILE = DATA_DIR / "twenty_data" / "inheadenRegion.csv"
+
+REGIONS_DICT = extract_region_mapping_new(MAPPING_REGION_FILE)
+
 
 DROP_COLUMNS = [
     'Contact Id', 'Contact Owner.id', "Contact Name", 'Created By.id', 'Created By', 'Modified By.id', 'Modified By', 'Modified Time', 
@@ -102,6 +106,51 @@ title_mapping = {
 }
 
 
+country_region_mapping = {
+    "Inheaden Europe": [
+        "Germany",
+        "Belgium",
+        "Czech Rep.",
+        "Denmark",
+        "Estonia",
+        "Finland",
+        "Sweden",
+        "England",
+        "Switzerland",
+        "Poland",
+        "Austria",
+        "UK",
+        "Costa Rica",
+        "Vanuatu",
+        "Italy",
+        "Portugal",
+        "Deutschland",
+        "Germany, English",
+        "Germany."
+    ],
+    "Inheaden India": [
+        "India",
+        "india"
+    ],
+    "Inheaden Middle East": [
+        "UAE",
+        "Kuwait",
+        "Lebanon",
+        "Egypt",
+        "Saudi Arabia",
+        "Mauritius, UAE",
+        "Abu Dhabi, UAE",
+        "Sharjah, UAE",
+        "United Arab Emirates",
+        "Dubai",
+        "Oman",
+        "Bahrain",
+        "KSA",
+        "united arab emirates"
+    ]
+}
+
+
 df = pd.read_csv(RAW_FILE)
 
 companies_df = pd.read_csv(COMPANY_TWENTY_FILE)
@@ -109,6 +158,12 @@ companies_df = pd.read_csv(COMPANY_TWENTY_FILE)
 df['Contact Owner'] = df['Contact Owner'].map(parse_name_to_email)
 df.loc[df['Contact Owner'].isin(['traudel.boakye@inheaden.io',
 'ahmed.elshamanhory@inheaden.io', 'inheaden.admin@inheaden.io']), 'Contact Owner'] = 'admin@inheaden.io'
+df.loc[df['Contact Owner'].isin(['lars.grober@inheaden.io']), 'Contact Owner'] = 'lars.groeber@inheaden.io'
+
+### Patch for unregistered users
+df.loc[df['Contact Owner'].isin(['florian.schlichting@inheaden.io',
+       'sabine.schafer@inheaden.io', 'jeanette.natalie@inheaden.io']), 'Contact Owner'] = 'admin@inheaden.io'
+
 company_name_id_mapping = dict(zip(companies_df['Name'], companies_df['Id']))
 df["Title"] = df['Title'].map(title_mapping)
 
@@ -117,6 +172,9 @@ df['Tag'] = df['Tag'].astype(str).apply(lambda x: '[]' if x == 'nan' else (f'["{
 
 df['Home Phone'] = df['Home Phone'].astype(str).apply(parse_phone_json)
 df['Private Email'] = df['Private Email'].astype(str).apply(lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split())>0 else '[]'))
+
+for region, countries in country_region_mapping.items():
+    df.loc[df['Country'].isin(countries), 'Contact Region / Id'] = REGIONS_DICT[region]
 
 df.drop(columns=DROP_COLUMNS, inplace=True)
 df.rename(columns=RENAMED_COLUMNS, inplace=True)
