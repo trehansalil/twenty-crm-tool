@@ -132,7 +132,7 @@ def format_array_fields(df: pd.DataFrame) -> pd.DataFrame:
     
     # Format tags as JSON array
     df['Tag'] = df['Tag'].astype(str).apply(
-        lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split()) > 0 else '[]')
+        lambda x: '[]' if x == 'nan' or x.strip() == '' else '[' + ','.join([f'"{tag.strip()}"' for tag in x.split(',')]) + ']'
     )
     
     # Format phone numbers
