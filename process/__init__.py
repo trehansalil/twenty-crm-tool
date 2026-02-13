@@ -13,6 +13,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def convert_to_array_dump(tag_str):
+    """
+    Parse tag string and format as JSON array.
+    Splits comma-separated tags into individual array elements.
+    
+    Args:
+        tag_str: String containing tags (comma-separated or single tag)
+        
+    Returns:
+        str: JSON formatted array string
+    """
+    if tag_str == 'nan' or tag_str.strip() == '':
+        return '[]'
+    
+    # Split by comma and create JSON array
+    tags = [f'"{tag.strip()}"' for tag in tag_str.split(',') if tag.strip()]
+    return '[' + ','.join(tags) + ']' if tags else '[]'
+
+
 def parse_phone_json(phone_str):
     import re
     calling_code_country = {
@@ -117,6 +136,36 @@ def map_company_ids(df: pd.DataFrame, companies_df: pd.DataFrame) -> pd.DataFram
     )
     return df
 
+def parse_email_array(private_email, secondary_email):
+    """
+    Parse and combine private and secondary emails into a JSON array.
+    Handles cases where either, both, or neither email is present.
+    
+    Args:
+        private_email: Private email value (could be nan, empty, or valid email)
+        secondary_email: Secondary email value (could be nan, empty, or valid email)
+        
+    Returns:
+        str: JSON formatted array string with all valid emails
+    """
+    emails = []
+    
+    # Helper function to check if email is valid
+    def is_valid_email(email):
+        if pd.isna(email):
+            return False
+        email_str = str(email).strip()
+        return email_str not in ['', 'nan', 'None'] and len(email_str) > 0
+    
+    # Add private email if valid
+    if is_valid_email(private_email):
+        emails.append(f'"{str(private_email).strip()}"')
+    
+    # Add secondary email if valid
+    if is_valid_email(secondary_email):
+        emails.append(f'"{str(secondary_email).strip()}"')
+    
+    return '[' + ','.join(emails) + ']' if emails else '[]'
 
 def format_array_fields(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -131,16 +180,15 @@ def format_array_fields(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Formatting array fields")
     
     # Format tags as JSON array
-    df['Tag'] = df['Tag'].astype(str).apply(
-        lambda x: '[]' if x == 'nan' or x.strip() == '' else '[' + ','.join([f'"{tag.strip()}"' for tag in x.split(',')]) + ']'
-    )
+    df['Tag'] = df['Tag'].astype(str).apply(convert_to_array_dump)
     
     # Format phone numbers
     df['Home Phone'] = df['Home Phone'].astype(str).apply(parse_phone_json)
     
     # Format private emails as JSON array
-    df['Private Email'] = df['Private Email'].astype(str).apply(
-        lambda x: '[]' if x == 'nan' else (f'["{x}"]' if len(x.split()) > 0 else '[]')
+    df['Private Email'] = df.apply(
+        lambda row: parse_email_array(row['Private Email'], row['Secondary Email']), 
+        axis=1
     )
     
     return df
