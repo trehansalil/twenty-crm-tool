@@ -82,9 +82,9 @@ DEPRECATED_USER_EMAILS = [
 ]
 
 UNREGISTERED_USER_EMAILS = [
-    'florian.schlichting@inheaden.io',
+    # 'florian.schlichting@inheaden.io',
     'sabine.schafer@inheaden.io',
-    'jeanette.natalie@inheaden.io'
+    # 'jeanette.natalie@inheaden.io'
 ]
 
 USER_EMAIL_CORRECTIONS = {
